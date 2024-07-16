@@ -55,11 +55,11 @@ client.on('messageCreate', async (message) => {
         message.channel.send(`There are ${count} krunks in this channel.`);
     }
     if (message.content === '!dailyKrunk') {
-        doKrunk(message);
+        doKrunk(message.channel);
     }
 });
 
-async function doKrunk(message) {
+async function doKrunk(channel) {
     
     try {
         const guild = await client.guilds.fetch(process.env.guildID);
@@ -71,14 +71,14 @@ async function doKrunk(message) {
         const members = await guild.members.fetch();
         members.forEach(member => {
             console.log(`Member: ${member.user.tag}`);
-            if(member.roles.cache.has(process.env.roleID)) // idk how this would work tbh bc i shouldnt share api keys/sensitive stuff to pulic repo
+            if(member.roles.cache.has(process.env.roleID))
             {
-                message.channel.send(member.displayName + " says krunker");
+                channel.send(member.displayName + " says krunker");
             }
         });
     } catch (error) {
         console.error('Error fetching guild members:', error);
-        message.channel.send("Something broke! Contact Samson pls")
+        channel.send("Something broke! Contact Samson pls")
     }
 }
 
