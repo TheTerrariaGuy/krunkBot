@@ -1,0 +1,3 @@
+TODO:
+Update all the maps when new krunks are sent in chat
+Refactor the parallel maps into one map of uuid (key) to weird data type 

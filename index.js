@@ -2,8 +2,10 @@ const dotenv = require('dotenv');
 dotenv.config()
 const cron = require('node-cron');
 const { Client, GatewayIntentBits, SystemChannelFlagsBitField } = require('discord.js');
-const krunks = new Map();
-const lastKrunks = new Map();
+const krunks = new Map(); // id : int
+const lastKrunks = new Map(); // id : int
+const streaks = new Map(); // id : {start, longest}
+
 
 const client = new Client({
     intents:[
@@ -52,7 +54,7 @@ client.on('messageCreate', async (message) => {
         message.reply(`There are ${count} krunks in this channel.`);
     }
     if (message.content === '!krunks members') {
-        countKrunks(message.channelId);
+        listKrunks(message);
     }
     if (message.content === '!dailyKrunk') {
         doKrunk(message.channel);
@@ -104,7 +106,7 @@ async function doKrunk(channel) {
             }
         });
     } catch (error) {
-        console.error('Error fetching guild members:', error);
+        console.error("Error fetching guild members:", error);
         channel.send("Something broke! Contact Samson pls");
     }
 }
@@ -114,6 +116,7 @@ async function initialKrunkCount(){
     const members = await guild.members.fetch();
     members.forEach(member => {
         if(!member.user.bot){
+            streaks.set(member.user.id, {last: -1, longest: -1}); // user id as key, {start (last continuous), longest} 
             krunks.set(member.user.id, 0); // uses member id as key
             lastKrunks.set(member.user.id, -1); // member id as key, unix timestamp as value (if -1, then that measn it is unset)
         }
@@ -133,37 +136,68 @@ async function initialKrunkCount(){
         }
         messages.forEach(message => {
             if (message.content.toUpperCase().includes('KRUNKER') && !message.author.bot) {
-                var timeStamp = message.createdTimestamp;
-                if(Math.trunc(timeStamp/86400000) != Math.trunc(lastKrunks.get(message.author.id)/86400000)) // 86.4 million miliseconds in a day, checks if its in the same day or not
+                const timeStamp = message.createdTimestamp;
+                const id = message.author.id;
+                if(Math.trunc(timeStamp/86400000) != Math.trunc(lastKrunks.get(id)/86400000)) // 86.4 million miliseconds in a day, checks if its in the same day or not
                 {
-                    krunks.set(message.author.id, krunks.get(message.author.id) + 1); // i forgor u cant just change maps with get() this took so long to figure out zzzzzzzzz 
-                    lastKrunks.set(message.author.id, message.createdTimestamp); 
+                    // all the streaking thingies
+                    if(streaks.get(id).longest == -1) streaks.set(id, {last: timeStamp, longest: 1});
+                    if(Math.abs(Math.trunc(timeStamp/86400000) - Math.trunc(lastKrunks.get(id)/86400000)) <= 1)
+                    { // checks for consective days
+                        console.log("streaking1");
+                        console.log(streaks.get(id).longest);
+                        console.log(Math.trunc(timeStamp/86400000));
+                        console.log(Math.trunc(streaks.get(id).last/86400000));
+                        if(streaks.get(id).longest <= Math.abs(Math.trunc(timeStamp/86400000) - Math.trunc(lastKrunks.get(id)/86400000))){ // for efficiency purposes, we arent constantly updating if there is any non highest streak
+                            console.log("streaking2");
+                            streaks.set(id, {last: streaks.get(id).last, longest: Math.abs(Math.trunc(timeStamp/86400000) - Math.trunc(lastKrunks.get(id)/86400000)) + 1}); // keeps last, but updates highest streak
+                            // very goog programming practice ^^^
+                            // print();
+                        }
+                    }else{
+                        console.log("nostreak");
+                        streaks.set(id, {last: timeStamp, longest: streaks.get(id).longest}); // updates timestamp if no active streak
+                    }
+
+                    krunks.set(id, krunks.get(message.author.id) + 1); // i forgor u cant just change maps with get() this took so long to figure out zzzzzzzzz 
+                    lastKrunks.set(id, timeStamp); 
                 }
             }
         });
         
         lastMessageId = messages.last().id;
     }
-    listKrunks(process.env.krunkChannel);
+    listKrunks(null);
 }
 
 // Displays a list of krunks by person
 // may refactor to include different options (by year maybe etc)
-async function listKrunks(channelID){
+async function listKrunks(message){
     out = "**Krunks:**\n";
     const names = [];
     const vals = [];
-    krunks.forEach((value, key) => { // I HATE ASYNC AHHHHHHHHHHHH
+    const longs = [];
+    krunks.forEach((value, key) => { // I HATE ASYNC AHHHHHHHHHHHH i have to like cache everything grr
         names.push(client.users.fetch(key));
         vals.push(value);
+        longs.push(streaks.get(key).longest);
     });
     const display = await Promise.all(names);
     for(let i = 0; i < vals.length; i ++){
-        out = out + display[i].displayName + ": " + vals[i] + "\n";
+        out = out + display[i].displayName + ": " + vals[i] + ", Highest Streak: " + longs[i] + "\n";
     }
-    const channel = await client.channels.fetch(channelID);
-    channel.send(out);
+    if(message == null){
+        console.log(out);
+        return;
+    }
+    message.reply(out);
 }
+
+async function topStreaks(message){
+
+}
+
+
 
 
 client.login(process.env.DISCORD_TOKEN)
